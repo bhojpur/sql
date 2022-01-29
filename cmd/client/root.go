@@ -61,8 +61,8 @@ var rootCmdOpts struct {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "sql",
-	Short: "Bhojpur SQL is an elastic database engine powered by Kubernetes",
+	Use:   "sqlctl",
+	Short: "Bhojpur SQLclient is a client engine for relational databases",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if verbose {
 			log.SetLevel(log.DebugLevel)

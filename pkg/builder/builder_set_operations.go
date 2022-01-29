@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -22,39 +22,40 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"strings"
 )
 
-var verbose bool
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
-		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+func (b *Builder) setOpWriteTo(w Writer) error {
+	if b.limitation != nil || b.cond.IsValid() ||
+		b.orderBy != "" || b.having != "" || b.groupBy != "" {
+		return ErrNotUnexpectedUnionConditions
 	}
-}
-
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+	for idx, o := range b.setOps {
+		current := o.builder
+		if current.optype != selectType {
+			return ErrUnsupportedUnionMembers
+		}
+		if len(b.setOps) == 1 {
+			if err := current.selectWriteTo(w); err != nil {
+				return err
+			}
+		} else {
+			if b.dialect != "" && b.dialect != current.dialect {
+				return ErrInconsistentDialect
+			}
+			if idx != 0 {
+				if o.distinctType == "" {
+					fmt.Fprint(w, fmt.Sprintf(" %s ", strings.ToUpper(o.opType)))
+				} else {
+					fmt.Fprint(w, fmt.Sprintf(" %s %s ", strings.ToUpper(o.opType), strings.ToUpper(o.distinctType)))
+				}
+			}
+			fmt.Fprint(w, "(")
+			if err := current.selectWriteTo(w); err != nil {
+				return err
+			}
+			fmt.Fprint(w, ")")
+		}
+	}
+	return nil
 }

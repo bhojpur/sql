@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,41 +20,42 @@ package cmd
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"fmt"
-	"os"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-)
-
-var verbose bool
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
-		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+type condIf struct {
+	condition bool
+	condTrue  Cond
+	condFalse Cond
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+var _ Cond = condIf{}
+
+// If returns Cond via condition
+func If(condition bool, condTrue Cond, condFalse ...Cond) Cond {
+	var c = condIf{
+		condition: condition,
+		condTrue:  condTrue,
 	}
+	if len(condFalse) > 0 {
+		c.condFalse = condFalse[0]
+	}
+	return c
 }
-
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+func (condIf condIf) WriteTo(w Writer) error {
+	if condIf.condition {
+		return condIf.condTrue.WriteTo(w)
+	} else if condIf.condFalse != nil {
+		return condIf.condFalse.WriteTo(w)
+	}
+	return nil
+}
+func (condIf condIf) And(conds ...Cond) Cond {
+	return And(condIf, And(conds...))
+}
+func (condIf condIf) Or(conds ...Cond) Cond {
+	return Or(condIf, Or(conds...))
+}
+func (condIf condIf) IsValid() bool {
+	if condIf.condition {
+		return condIf.condTrue != nil
+	}
+	return condIf.condFalse != nil
 }

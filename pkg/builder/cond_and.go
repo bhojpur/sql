@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,41 +20,50 @@ package cmd
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"fmt"
-	"os"
+import "fmt"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-)
+type condAnd []Cond
 
-var verbose bool
+var _ Cond = condAnd{}
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
+// And generates AND conditions
+func And(conds ...Cond) Cond {
+	var result = make(condAnd, 0, len(conds))
+	for _, cond := range conds {
+		if cond == nil || !cond.IsValid() {
+			continue
 		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		result = append(result, cond)
 	}
+	return result
 }
-
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+func (and condAnd) WriteTo(w Writer) error {
+	for i, cond := range and {
+		_, isOr := cond.(condOr)
+		_, isExpr := cond.(expr)
+		wrap := isOr || isExpr
+		if wrap {
+			fmt.Fprint(w, "(")
+		}
+		err := cond.WriteTo(w)
+		if err != nil {
+			return err
+		}
+		if wrap {
+			fmt.Fprint(w, ")")
+		}
+		if i != len(and)-1 {
+			fmt.Fprint(w, " AND ")
+		}
+	}
+	return nil
+}
+func (and condAnd) And(conds ...Cond) Cond {
+	return And(and, And(conds...))
+}
+func (and condAnd) Or(conds ...Cond) Cond {
+	return Or(and, Or(conds...))
+}
+func (and condAnd) IsValid() bool {
+	return len(and) > 0
 }

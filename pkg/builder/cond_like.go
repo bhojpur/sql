@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,41 +20,38 @@ package cmd
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"fmt"
-	"os"
+import "fmt"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-)
+// Like defines like condition
+type Like [2]string
 
-var verbose bool
+var _ Cond = Like{"", ""}
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
-		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+// WriteTo write SQL to Writer
+func (like Like) WriteTo(w Writer) error {
+	if _, err := fmt.Fprintf(w, "%s LIKE ?", like[0]); err != nil {
+		return err
 	}
+	// FIXME: if use other regular express, this will be failed. but for compatible, keep this
+	if like[1][0] == '%' || like[1][len(like[1])-1] == '%' {
+		w.Append(like[1])
+	} else {
+		w.Append("%" + like[1] + "%")
+	}
+	return nil
 }
 
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+// And implements And with other conditions
+func (like Like) And(conds ...Cond) Cond {
+	return And(like, And(conds...))
+}
+
+// Or implements Or with other conditions
+func (like Like) Or(conds ...Cond) Cond {
+	return Or(like, Or(conds...))
+}
+
+// IsValid tests if this condition is valid
+func (like Like) IsValid() bool {
+	return len(like[0]) > 0 && len(like[1]) > 0
 }

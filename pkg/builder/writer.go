@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -21,40 +21,38 @@ package cmd
 // THE SOFTWARE.
 
 import (
-	"fmt"
-	"os"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"io"
+	"strings"
 )
 
-var verbose bool
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
-		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+// Writer defines the interface
+type Writer interface {
+	io.Writer
+	Append(...interface{})
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+var _ Writer = NewWriter()
+
+// BytesWriter implments Writer and save SQL in bytes.Buffer
+type BytesWriter struct {
+	*strings.Builder
+	args []interface{}
+}
+
+// NewWriter creates a new string writer
+func NewWriter() *BytesWriter {
+	w := &BytesWriter{
+		Builder: &strings.Builder{},
 	}
+	return w
 }
 
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+// Append appends args to Writer
+func (w *BytesWriter) Append(args ...interface{}) {
+	w.args = append(w.args, args...)
+}
+
+// Args returns args
+func (w *BytesWriter) Args() []interface{} {
+	return w.args
 }

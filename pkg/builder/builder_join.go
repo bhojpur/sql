@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,41 +20,38 @@ package cmd
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"fmt"
-	"os"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-)
-
-var verbose bool
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
-		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+// InnerJoin sets inner join
+func (b *Builder) InnerJoin(joinTable, joinCond interface{}) *Builder {
+	return b.Join("INNER", joinTable, joinCond)
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+// LeftJoin sets left join SQL
+func (b *Builder) LeftJoin(joinTable, joinCond interface{}) *Builder {
+	return b.Join("LEFT", joinTable, joinCond)
+}
+
+// RightJoin sets right join SQL
+func (b *Builder) RightJoin(joinTable, joinCond interface{}) *Builder {
+	return b.Join("RIGHT", joinTable, joinCond)
+}
+
+// CrossJoin sets cross join SQL
+func (b *Builder) CrossJoin(joinTable, joinCond interface{}) *Builder {
+	return b.Join("CROSS", joinTable, joinCond)
+}
+
+// FullJoin sets full join SQL
+func (b *Builder) FullJoin(joinTable, joinCond interface{}) *Builder {
+	return b.Join("FULL", joinTable, joinCond)
+}
+
+// Join sets join table and conditions
+func (b *Builder) Join(joinType string, joinTable, joinCond interface{}) *Builder {
+	switch joinCond.(type) {
+	case Cond:
+		b.joins = append(b.joins, join{joinType, joinTable, joinCond.(Cond)})
+	case string:
+		b.joins = append(b.joins, join{joinType, joinTable, Expr(joinCond.(string))})
 	}
-}
-
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+	return b
 }

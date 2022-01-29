@@ -1,4 +1,4 @@
-package cmd
+package builder
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,41 +20,58 @@ package cmd
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"fmt"
-	"os"
+import "fmt"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-)
+type condOr []Cond
 
-var verbose bool
+var _ Cond = condOr{}
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "sqlsvr",
-	Short: "Bhojpur SQLengine is a high performance, relational database engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if verbose {
-			log.SetLevel(log.DebugLevel)
-			log.Debug("verbose logging enabled")
+// Or sets OR conditions
+func Or(conds ...Cond) Cond {
+	var result = make(condOr, 0, len(conds))
+	for _, cond := range conds {
+		if cond == nil || !cond.IsValid() {
+			continue
 		}
-	},
-
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		result = append(result, cond)
 	}
+	return result
 }
 
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "en/disable verbose logging")
+// WriteTo implments Cond
+func (o condOr) WriteTo(w Writer) error {
+	for i, cond := range o {
+		var needQuote bool
+		switch cond.(type) {
+		case condAnd, expr:
+			needQuote = true
+		case Eq:
+			needQuote = (len(cond.(Eq)) > 1)
+		case Neq:
+			needQuote = (len(cond.(Neq)) > 1)
+		}
+		if needQuote {
+			fmt.Fprint(w, "(")
+		}
+		err := cond.WriteTo(w)
+		if err != nil {
+			return err
+		}
+		if needQuote {
+			fmt.Fprint(w, ")")
+		}
+		if i != len(o)-1 {
+			fmt.Fprint(w, " OR ")
+		}
+	}
+	return nil
+}
+func (o condOr) And(conds ...Cond) Cond {
+	return And(o, And(conds...))
+}
+func (o condOr) Or(conds ...Cond) Cond {
+	return Or(o, Or(conds...))
+}
+func (o condOr) IsValid() bool {
+	return len(o) > 0
 }
